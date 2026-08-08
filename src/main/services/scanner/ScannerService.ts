@@ -1,5 +1,6 @@
 import { v4 as uuid } from 'uuid'
 import * as path from 'path'
+import * as fs from 'fs/promises'
 import { PlatformService } from '../system/PlatformService'
 import { isPathAccessible } from '../../utils/fsUtils'
 import { CATEGORY_LABELS } from '../../../shared/constants'
@@ -27,48 +28,44 @@ export class ScannerService {
     let totalScanned = 0
     let lastProgressTime = 0
 
-    // Process locations in parallel batches of 5 for maximum SSD read speed
-    const batchSize = 5
-    for (let i = 0; i < locations.length; i += batchSize) {
+    // Process top locations with isolated sub-directory scanning for Application Caches
+    for (let i = 0; i < locations.length; i++) {
       if (this.cancelled) break
 
-      const batch = locations.slice(i, i + batchSize)
-      const batchPromises = batch.map(async (location) => {
-        if (this.cancelled) return []
+      const location = locations[i]
+      const expandedPath = this.platformService.expandPath(location.path)
+      const accessible = await isPathAccessible(expandedPath)
 
-        const expandedPath = this.platformService.expandPath(location.path)
-        const accessible = await isPathAccessible(expandedPath)
+      if (!accessible) continue
 
-        if (!accessible) return []
+      const now = Date.now()
+      if (now - lastProgressTime > 80) {
+        lastProgressTime = now
+        onProgress({
+          phase: 'indexing',
+          filesScanned: totalScanned,
+          totalFound: Array.from(resultsMap.values()).reduce((sum, items) => sum + items.length, 0),
+          currentPath: expandedPath,
+          percentage: Math.min(99, Math.round((i / locations.length) * 100)),
+        })
+      }
 
-        // Stream progress notification
-        const now = Date.now()
-        if (now - lastProgressTime > 80) {
-          lastProgressTime = now
-          onProgress({
-            phase: 'indexing',
-            filesScanned: totalScanned,
-            totalFound: Array.from(resultsMap.values()).reduce((sum, items) => sum + items.length, 0),
-            currentPath: expandedPath,
-            percentage: Math.min(99, Math.round((i / locations.length) * 100)),
-          })
+      // Special handling for ~/Library/Caches: enumerate sub-folders independently
+      let items: ScannedItem[] = []
+      if (location.path.endsWith('/Caches') || location.path.endsWith('\\Caches')) {
+        items = await this.scanAppCachesIndependently(expandedPath, location.category, location.label)
+      } else {
+        items = await this.scanLocationFast(expandedPath, location.category, location.label)
+      }
+
+      if (items.length === 0) continue
+      totalScanned += items.length
+
+      for (const item of items) {
+        if (!resultsMap.has(item.category)) {
+          resultsMap.set(item.category, [])
         }
-
-        return this.scanLocationFast(expandedPath, location.category, location.label)
-      })
-
-      const batchResults = await Promise.all(batchPromises)
-
-      for (const items of batchResults) {
-        if (items.length === 0) continue
-        totalScanned += items.length
-
-        for (const item of items) {
-          if (!resultsMap.has(item.category)) {
-            resultsMap.set(item.category, [])
-          }
-          resultsMap.get(item.category)!.push(item)
-        }
+        resultsMap.get(item.category)!.push(item)
       }
     }
 
@@ -109,13 +106,41 @@ export class ScannerService {
     this.cancelled = true
   }
 
+  // Scan Application Caches independently so EACCES on one system folder doesn't skip app caches
+  private async scanAppCachesIndependently(
+    cachesDir: string,
+    category: ScanCategory,
+    label: string
+  ): Promise<ScannedItem[]> {
+    const allItems: ScannedItem[] = []
+
+    try {
+      const subEntries = await fs.readdir(cachesDir, { withFileTypes: true }).catch(() => [])
+
+      const appFolders = subEntries
+        .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
+        .map((entry) => path.join(cachesDir, entry.name))
+
+      for (const appFolder of appFolders) {
+        if (this.cancelled) break
+        if (this.isWhitelisted(appFolder)) continue
+
+        const folderItems = await this.scanLocationFast(appFolder, category, `${path.basename(appFolder)} Cache`)
+        allItems.push(...folderItems)
+      }
+    } catch {
+      // Ignore root readdir failure
+    }
+
+    return allItems
+  }
+
   private async scanLocationFast(
     dirPath: string,
     category: ScanCategory,
     label: string
   ): Promise<ScannedItem[]> {
     try {
-      // Use fast-glob with stats: true to retrieve file sizes and modification times directly from fast readdir
       const entries = await glob('**/*', {
         cwd: dirPath,
         absolute: true,
@@ -123,7 +148,7 @@ export class ScannerService {
         stats: true,
         onlyFiles: true,
         suppressErrors: true,
-        deep: 6, // Cap depth to 6 levels to avoid infinite symlinks
+        deep: 5,
       })
 
       const items: ScannedItem[] = []
@@ -136,6 +161,8 @@ export class ScannerService {
         const stat = entry.stats
         const size = stat ? stat.size : 0
 
+        const isSafe = this.isSafeToDelete(filePath)
+
         items.push({
           id: uuid(),
           path: filePath,
@@ -145,7 +172,7 @@ export class ScannerService {
           lastAccessed: stat ? stat.atimeMs : Date.now(),
           category,
           description: `${label} file`,
-          safeToDelete: this.isSafeToDelete(filePath),
+          safeToDelete: isSafe,
         })
       }
 
@@ -159,8 +186,61 @@ export class ScannerService {
     return this.whitelist.some(w => filePath === w || filePath.startsWith(w + path.sep))
   }
 
+  // Ironclad Safety Guard: Strict protection rules to protect critical user files & system configs
   private isSafeToDelete(filePath: string): boolean {
-    const dangerPatterns = ['/System/', '/usr/bin/', '/bin/', 'C:\\Windows\\System32', '/Library/KernelExtensions']
-    return !dangerPatterns.some(p => filePath.includes(p))
+    const normalized = filePath.replace(/\\/g, '/')
+
+    // 1. Never delete macOS & Windows system core
+    const systemProtected = [
+      '/System/',
+      '/usr/bin/',
+      '/usr/sbin/',
+      '/bin/',
+      '/sbin/',
+      '/etc/',
+      '/var/db/',
+      'C:/Windows/',
+      'C:/Program Files/',
+      'C:/Program Files (x86)/',
+    ]
+    if (systemProtected.some(p => normalized.includes(p))) return false
+
+    // 2. Never delete User Credentials, Keys & Preferences
+    const securityProtected = [
+      '/.ssh/',
+      '/.aws/',
+      '/.kube/',
+      '/.gnupg/',
+      '/.keychain',
+      '~/Library/Keychains/',
+      '/Library/Keychains/',
+      '~/Library/Preferences/',
+      '/.git/',
+      '/.env',
+    ]
+    if (securityProtected.some(p => normalized.includes(p))) return false
+
+    // 3. Never delete User Documents, Code Workspaces, & Media
+    const userWorkspaceProtected = [
+      '/Documents/',
+      '/Desktop/',
+      '/Pictures/',
+      '/Movies/',
+      '/Music/',
+      '/Projects/',
+      '/Developer/',
+      '/iCloud Drive/',
+      '/Dropbox/',
+      '/OneDrive/',
+      '/Google Drive/',
+    ]
+    if (userWorkspaceProtected.some(p => normalized.includes(p))) return false
+
+    // 4. Never delete active lock files
+    if (normalized.endsWith('.lock') || normalized.endsWith('.lck') || normalized.includes('SingletonLock')) {
+      return false
+    }
+
+    return true
   }
 }
