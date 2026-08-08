@@ -212,7 +212,7 @@ export default function SettingsHome() {
               <Settings className="w-8 h-8" />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white">CleanSweep v1.2.0</h3>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white">CleanSweep v1.3.0</h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Cross-Platform Desktop Cleaner & File Organizer</p>
             </div>
           </div>

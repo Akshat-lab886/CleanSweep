@@ -162,12 +162,14 @@ export default function CleanerHome() {
   if (status === 'scanning') {
     return (
       <div className="max-w-2xl mx-auto py-16 text-center space-y-6">
-        {/* Radar Spinning Visual */}
-        <div className="relative w-36 h-36 mx-auto flex items-center justify-center">
-          <div className="absolute inset-0 rounded-full border-2 border-blue-500/20 dark:border-blue-500/10 animate-ping" />
-          <div className="absolute inset-2 rounded-full border border-blue-500/30 dark:border-blue-500/20" />
-          <div className="absolute inset-0 rounded-full border-t-2 border-blue-500 animate-radar" />
-          <Sparkles className="w-10 h-10 text-blue-500 animate-pulse" />
+        {/* Animated Radar Scanning HUD */}
+        <div className="relative w-44 h-44 mx-auto flex items-center justify-center">
+          <div className="absolute inset-0 rounded-full border-2 border-blue-500/30 dark:border-blue-500/20 animate-ripple" />
+          <div className="absolute inset-4 rounded-full border border-indigo-500/40 dark:border-indigo-500/30 animate-pulse-wave" />
+          <div className="absolute inset-0 rounded-full border-t-2 border-r-2 border-blue-500 animate-radar-sweep shadow-lg shadow-blue-500/30" />
+          <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 flex items-center justify-center shadow-xl shadow-blue-500/40 animate-glow-halo">
+            <Sparkles className="w-8 h-8 text-white animate-spin" />
+          </div>
         </div>
 
         <div className="space-y-2">

@@ -1,133 +1,103 @@
-/* Animation keyframes */
-@keyframes fadeIn {
-  from {
+/* CleanSweep Premium Animation System */
+
+@keyframes pageEnter {
+  0% {
     opacity: 0;
+    transform: translateY(12px) scale(0.98);
   }
-  to {
+  100% {
     opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 
-@keyframes slideInRight {
-  from {
-    opacity: 0;
-    transform: translateX(10px);
+.animate-page-enter {
+  animation: pageEnter 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
   }
-  to {
-    opacity: 1;
-    transform: translateX(0);
+  100% {
+    background-position: 200% 0;
   }
 }
 
-@keyframes slideInUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.shimmer-button {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.25) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 3s infinite linear;
 }
 
-@keyframes pulse {
+@keyframes floatGentle {
   0%, 100% {
-    opacity: 1;
+    transform: translateY(0px);
   }
   50% {
-    opacity: 0.5;
+    transform: translateY(-6px);
   }
 }
 
-@keyframes spin {
-  from {
+.animate-float-gentle {
+  animation: floatGentle 4s ease-in-out infinite;
+}
+
+@keyframes glowPulse {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.2), inset 0 0 15px rgba(59, 130, 246, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 35px rgba(99, 102, 241, 0.45), inset 0 0 25px rgba(99, 102, 241, 0.25);
+  }
+}
+
+.animate-glow-halo {
+  animation: glowPulse 2.8s ease-in-out infinite;
+}
+
+@keyframes radarRotate {
+  0% {
     transform: rotate(0deg);
   }
-  to {
+  100% {
     transform: rotate(360deg);
   }
 }
 
-@keyframes countUp {
-  from {
-    opacity: 0;
-    transform: translateY(5px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.animate-radar-sweep {
+  animation: radarRotate 2s linear infinite;
 }
 
-/* Animation utility classes */
-.animate-fadeIn {
-  animation: fadeIn 200ms ease-out;
-}
-
-.animate-slideInRight {
-  animation: slideInRight 200ms ease-out;
-}
-
-.animate-slideInUp {
-  animation: slideInUp 200ms ease-out;
-}
-
-.animate-pulse-slow {
-  animation: pulse 2s ease-in-out infinite;
-}
-
-.animate-spin-slow {
-  animation: spin 2s linear infinite;
-}
-
-.animate-countUp {
-  animation: countUp 300ms ease-out;
-}
-
-/* Page transition */
-.page-transition-enter {
-  opacity: 0;
-  transform: translateY(4px);
-}
-
-.page-transition-enter-active {
-  opacity: 1;
-  transform: translateY(0);
-  transition: opacity 200ms ease-out, transform 200ms ease-out;
-}
-
-.page-transition-exit {
-  opacity: 1;
-}
-
-.page-transition-exit-active {
-  opacity: 0;
-  transition: opacity 150ms ease-in;
-}
-
-/* Skeleton animation */
-.skeleton {
-  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
-  background-size: 200% 100%;
-  animation: skeleton-pulse 1.5s ease-in-out infinite;
-}
-
-.dark .skeleton {
-  background: linear-gradient(90deg, #1f2937 25%, #374151 50%, #1f2937 75%);
-  background-size: 200% 100%;
-}
-
-@keyframes skeleton-pulse {
+@keyframes rippleRing {
   0% {
-    background-position: 200% 0;
+    transform: scale(0.85);
+    opacity: 0.9;
   }
   100% {
-    background-position: -200% 0;
+    transform: scale(1.6);
+    opacity: 0;
   }
 }
 
-/* Number count-up animation */
-.count-up {
-  display: inline-block;
-  animation: countUp 300ms ease-out;
+.animate-ripple {
+  animation: rippleRing 2.2s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+}
+
+@keyframes textGlow {
+  0%, 100% {
+    filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.3));
+  }
+  50% {
+    filter: drop-shadow(0 0 16px rgba(168, 85, 247, 0.6));
+  }
+}
+
+.animate-text-glow {
+  animation: textGlow 3s ease-in-out infinite;
 }
