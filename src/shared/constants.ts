@@ -2,7 +2,7 @@ import type { AppConfig, ScanCategory } from './types'
 
 // App constants
 export const APP_NAME = 'CleanSweep'
-export const APP_VERSION = '1.1.0'
+export const APP_VERSION = '1.2.0'
 
 // Browser list
 export const BROWSER_LIST = ['chrome', 'firefox', 'safari', 'edge', 'brave', 'opera'] as const
