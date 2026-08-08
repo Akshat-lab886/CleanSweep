@@ -23,7 +23,6 @@ export class QuarantineService {
       return true
     } catch (err) {
       logger.warn('QuarantineService', `Failed to move ${filePath} to System Trash: ${err}`)
-      // Fallback to force remove if trashItem fails
       try {
         await fs.rm(filePath, { recursive: true, force: true })
         return true
@@ -37,12 +36,23 @@ export class QuarantineService {
     const succeeded: ScannedItem[] = []
     const failed: Array<{ item: ScannedItem; error: string }> = []
 
-    for (const item of items) {
-      const ok = await this.trashItem(item.path)
-      if (ok) {
-        succeeded.push(item)
-      } else {
-        failed.push({ item, error: 'Failed to move to Trash' })
+    // High-performance parallel pool chunking (15 concurrent trash operations)
+    const chunkSize = 15
+    for (let i = 0; i < items.length; i += chunkSize) {
+      const chunk = items.slice(i, i + chunkSize)
+      const results = await Promise.all(
+        chunk.map(async (item) => {
+          const ok = await this.trashItem(item.path)
+          return { item, ok }
+        })
+      )
+
+      for (const res of results) {
+        if (res.ok) {
+          succeeded.push(res.item)
+        } else {
+          failed.push({ item: res.item, error: 'Failed to move to Trash' })
+        }
       }
     }
 
@@ -71,11 +81,9 @@ export class QuarantineService {
     const quarantineFilename = `${uuid()}${path.extname(item.path)}`
     const quarantineFilePath = path.join(this.quarantinePath, quarantineFilename)
 
-    // Copy to quarantine
     try {
       await fs.copyFile(item.path, quarantineFilePath)
     } catch {
-      // Try with directories
       try {
         await fs.cp(item.path, quarantineFilePath, { recursive: true })
       } catch (err) {
@@ -83,14 +91,12 @@ export class QuarantineService {
       }
     }
 
-    // Delete original
     try {
       await fs.rm(item.path, { recursive: true, force: true })
     } catch (err) {
       logger.warn('QuarantineService', `Failed to delete original: ${err}`)
     }
 
-    // Create entry
     const entry: QuarantineEntry = {
       id,
       originalPath: item.path,
@@ -98,13 +104,12 @@ export class QuarantineService {
       filename: path.basename(item.path),
       size: item.size,
       deletedAt: Date.now(),
-      expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000), // 7 days
+      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
       reason,
       category: item.category,
       restorable: true,
     }
 
-    // Update manifest
     const manifest = await this.getManifest()
     manifest.push(entry)
     await this.saveManifest(manifest)
@@ -112,13 +117,7 @@ export class QuarantineService {
     return entry
   }
 
-  async quarantineItems(
-    items: ScannedItem[],
-    reason: string
-  ): Promise<{
-    succeeded: QuarantineEntry[]
-    failed: Array<{ item: ScannedItem; error: string }>
-  }> {
+  async quarantineItems(items: ScannedItem[], reason: string): Promise<{ succeeded: QuarantineEntry[]; failed: Array<{ item: ScannedItem; error: string }> }> {
     const succeeded: QuarantineEntry[] = []
     const failed: Array<{ item: ScannedItem; error: string }> = []
 
@@ -127,71 +126,41 @@ export class QuarantineService {
         const entry = await this.quarantineItem(item, reason)
         succeeded.push(entry)
       } catch (err) {
-        failed.push({
-          item,
-          error: err instanceof Error ? err.message : 'Unknown error',
-        })
+        failed.push({ item, error: (err as Error).message })
       }
     }
 
     return { succeeded, failed }
   }
 
-  async restoreItem(entryId: string): Promise<void> {
+  async restoreItem(id: string): Promise<void> {
     const manifest = await this.getManifest()
-    const entryIndex = manifest.findIndex(e => e.id === entryId)
+    const entry = manifest.find(e => e.id === id)
 
-    if (entryIndex === -1) {
-      throw new Error('Entry not found')
+    if (!entry) throw new Error('Quarantine entry not found')
+
+    let targetPath = entry.originalPath
+    if (await getFileStat(targetPath)) {
+      const ext = path.extname(targetPath)
+      const base = path.basename(targetPath, ext)
+      targetPath = path.join(path.dirname(targetPath), `${base}_restored${ext}`)
     }
 
-    const entry = manifest[entryIndex]
+    await ensureDir(path.dirname(targetPath))
+    await moveFile(entry.quarantinePath, targetPath)
 
-    // Ensure original directory exists
-    await ensureDir(path.dirname(entry.originalPath))
-
-    // Move back
-    let destPath = entry.originalPath
-    const exists = await getFileStat(entry.originalPath)
-    if (exists) {
-      // Append suffix if file already exists
-      const ext = path.extname(entry.originalPath)
-      const base = path.basename(entry.originalPath, ext)
-      const dir = path.dirname(entry.originalPath)
-      destPath = path.join(dir, `${base}_restored${ext}`)
-    }
-
-    await moveFile(entry.quarantinePath, destPath)
-
-    // Remove from manifest
-    manifest.splice(entryIndex, 1)
-    await this.saveManifest(manifest)
-  }
-
-  async purgeExpired(): Promise<number> {
-    const manifest = await this.getManifest()
-    const now = Date.now()
-    const toPurge = manifest.filter(e => e.expiresAt < now)
-
-    for (const entry of toPurge) {
-      try {
-        await fs.rm(entry.quarantinePath, { recursive: true, force: true })
-      } catch {}
-    }
-
-    const remaining = manifest.filter(e => e.expiresAt >= now)
-    await this.saveManifest(remaining)
-
-    return toPurge.length
+    const updated = manifest.filter(e => e.id !== id)
+    await this.saveManifest(updated)
   }
 
   async purgeAll(): Promise<number> {
     const manifest = await this.getManifest()
-    const count = manifest.length
+    let count = 0
 
     for (const entry of manifest) {
       try {
         await fs.rm(entry.quarantinePath, { recursive: true, force: true })
+        count++
       } catch {}
     }
 

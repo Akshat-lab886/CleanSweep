@@ -1,9 +1,9 @@
 import { v4 as uuid } from 'uuid'
 import * as path from 'path'
 import { PlatformService } from '../system/PlatformService'
-import { getFileStat, globFiles, isPathAccessible, listDirectory } from '../../utils/fsUtils'
+import { isPathAccessible, listDirectory } from '../../utils/fsUtils'
 import type { ScanResult, ScanProgress, ScannedItem } from '../../../shared/types'
-import { logger } from '../../utils/logger'
+import glob from 'fast-glob'
 
 export class BrowserScanner {
   constructor(private platformService: PlatformService) {}
@@ -31,7 +31,7 @@ export class BrowserScanner {
         phase: 'indexing',
         filesScanned: scanned,
         totalFound: results.flatMap(r => r.items).length,
-        currentPath: `Scanning ${browserId}...`,
+        currentPath: `Scanning ${this.getBrowserName(browserId)}...`,
         percentage: Math.round((scanned / total) * 100),
       })
 
@@ -43,7 +43,7 @@ export class BrowserScanner {
         for (const cachePath of expandedPaths) {
           if (!(await isPathAccessible(cachePath))) continue
 
-          const cacheItems = await this.getFilesInDir(cachePath, 'browser-cache')
+          const cacheItems = await this.getFilesInDirFast(cachePath)
           items.push(...cacheItems)
         }
       }
@@ -71,7 +71,6 @@ export class BrowserScanner {
       return [expanded]
     }
 
-    // Handle glob patterns (for Firefox profiles)
     const parts = pattern.split('*')
     const basePath = this.platformService.expandPath(parts[0])
 
@@ -98,36 +97,31 @@ export class BrowserScanner {
     return names[id] || id
   }
 
-  private async getFilesInDir(
-    dirPath: string,
-    category: 'browser-cache'
-  ): Promise<ScannedItem[]> {
-    const files = await globFiles('**/*', {
-      cwd: dirPath,
-      absolute: true,
-      dot: true,
-      onlyFiles: true,
-    }).catch(() => [])
+  private async getFilesInDirFast(dirPath: string): Promise<ScannedItem[]> {
+    try {
+      const entries = await glob('**/*', {
+        cwd: dirPath,
+        absolute: true,
+        dot: true,
+        stats: true,
+        onlyFiles: true,
+        suppressErrors: true,
+        deep: 5,
+      })
 
-    const items: ScannedItem[] = []
-
-    for (const file of files.slice(0, 10000)) {
-      const stat = await getFileStat(file)
-      if (!stat || stat.isDirectory) continue
-
-      items.push({
+      return entries.slice(0, 15000).map((entry) => ({
         id: uuid(),
-        path: file,
-        size: stat.size,
+        path: entry.path,
+        size: entry.stats ? entry.stats.size : 0,
         type: 'file',
-        lastModified: stat.lastModified,
-        lastAccessed: stat.lastAccessed,
-        category,
+        lastModified: entry.stats ? entry.stats.mtimeMs : Date.now(),
+        lastAccessed: entry.stats ? entry.stats.atimeMs : Date.now(),
+        category: 'browser-cache',
         description: 'Browser cache file',
         safeToDelete: true,
-      })
+      }))
+    } catch {
+      return []
     }
-
-    return items
   }
 }
