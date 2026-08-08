@@ -18,9 +18,8 @@
       }
     ],
     "category": "public.app-category.utilities",
-    "hardenedRuntime": true,
-    "entitlements": "assets/entitlements.mac.plist",
-    "entitlementsInherit": "assets/entitlements.mac.plist",
+    "identity": null,
+    "gatekeeperAssess": false,
     "minimumSystemVersion": "12.0"
   },
   "dmg": {

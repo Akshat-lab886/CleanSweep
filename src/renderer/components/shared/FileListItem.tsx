@@ -5,8 +5,10 @@ import { formatBytes } from '../../utils/format'
 
 interface FileListItemProps {
   item: ScannedItem
-  selected: boolean
-  onSelect: (id: string) => void
+  selected?: boolean
+  isSelected?: boolean
+  onSelect?: (id: string) => void
+  onToggle?: () => void
 }
 
 function getFileIcon(extension: string) {
@@ -28,29 +30,40 @@ function getFileIcon(extension: string) {
   return File
 }
 
-const FileListItem = memo(function FileListItem({ item, selected, onSelect }: FileListItemProps) {
+const FileListItem = memo(function FileListItem({ item, selected, isSelected, onSelect, onToggle }: FileListItemProps) {
+  const activeSelected = isSelected !== undefined ? isSelected : (selected || false)
   const ext = item.path.includes('.') ? '.' + item.path.split('.').pop() : ''
   const Icon = item.type === 'directory' ? Folder : getFileIcon(ext)
   const fileName = item.path.split('/').pop() || item.path.split('\\').pop() || item.path
 
+  const handleAction = () => {
+    if (onToggle) onToggle()
+    if (onSelect) onSelect(item.id)
+  }
+
   return (
     <div
-      className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors"
-      onClick={() => onSelect(item.id)}
+      className="flex items-center justify-between p-2.5 rounded-xl hover:bg-gray-100/70 dark:hover:bg-gray-800/60 cursor-pointer transition-all border border-transparent hover:border-gray-200/50 dark:hover:border-gray-700/50"
+      onClick={handleAction}
     >
-      <input
-        type="checkbox"
-        checked={selected}
-        onChange={() => onSelect(item.id)}
-        className="w-4 h-4 rounded border-gray-300 text-primary-500 focus:ring-primary-500"
-        onClick={(e) => e.stopPropagation()}
-      />
-      <Icon className="w-5 h-5 text-gray-400 flex-shrink-0" />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{fileName}</p>
-        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{item.path}</p>
+      <div className="flex items-center gap-3 min-w-0 pr-4">
+        <input
+          type="checkbox"
+          checked={activeSelected}
+          onChange={handleAction}
+          onClick={(e) => e.stopPropagation()}
+          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+        />
+        <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-500 flex items-center justify-center shrink-0 font-bold">
+          <Icon className="w-4 h-4" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">{fileName}</p>
+          <p className="text-[11px] font-mono text-gray-400 truncate">{item.path}</p>
+        </div>
       </div>
-      <span className="text-sm text-gray-600 dark:text-gray-400 flex-shrink-0">
+
+      <span className="text-xs font-bold text-gray-500 dark:text-gray-400 shrink-0">
         {formatBytes(item.size)}
       </span>
     </div>

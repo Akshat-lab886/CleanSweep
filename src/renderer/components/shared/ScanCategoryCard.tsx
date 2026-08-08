@@ -18,64 +18,64 @@ const categoryIcons: Record<ScanCategory, React.ElementType> = {
 }
 
 interface ScanCategoryCardProps {
-  result: ScanResult
-  selected: boolean
-  selectedCount: number
-  selectedSize: number
-  onSelect: (category: string, selected: boolean) => void
+  result?: ScanResult
+  category?: ScanCategory
+  categoryLabel?: string
+  itemCount?: number
+  totalSize?: number
+  selectedSize?: number
+  selectedCount?: number
+  selected?: boolean
+  isAllSelected?: boolean
+  onSelect?: (category: string, selected: boolean) => void
+  onToggleSelectAll?: (selected: boolean) => void
 }
 
-const ScanCategoryCard = memo(function ScanCategoryCard({
-  result,
-  selected,
-  selectedCount,
-  selectedSize,
-  onSelect,
-}: ScanCategoryCardProps) {
-  const Icon = categoryIcons[result.category] || Trash2
-  const percentage = result.totalSize > 0 ? (selectedSize / result.totalSize) * 100 : 0
+const ScanCategoryCard = memo(function ScanCategoryCard(props: ScanCategoryCardProps) {
+  const cat = props.category || props.result?.category || 'system-junk'
+  const label = props.categoryLabel || props.result?.categoryLabel || 'Category'
+  const count = props.itemCount !== undefined ? props.itemCount : props.result?.items.length || 0
+  const totSize = props.totalSize !== undefined ? props.totalSize : props.result?.totalSize || 0
+  const selSize = props.selectedSize || 0
+  const isChecked = props.isAllSelected !== undefined ? props.isAllSelected : props.selected || false
+
+  const handleToggle = (bool: boolean) => {
+    if (props.onToggleSelectAll) props.onToggleSelectAll(bool)
+    if (props.onSelect) props.onSelect(cat, bool)
+  }
+
+  const Icon = categoryIcons[cat] || Trash2
 
   return (
     <div
+      onClick={() => handleToggle(!isChecked)}
       className={clsx(
-        'p-4 rounded-lg border cursor-pointer transition-all',
-        selected
-          ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
-          : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
+        'p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between',
+        isChecked
+          ? 'border-blue-500/50 bg-blue-500/10 dark:bg-blue-500/15'
+          : 'glass-card hover:border-blue-500/30'
       )}
-      onClick={() => onSelect(result.category, !selected)}
     >
-      <div className="flex items-start gap-3">
+      <div className="flex items-center gap-3">
         <input
           type="checkbox"
-          checked={selected}
-          onChange={() => onSelect(result.category, !selected)}
-          className="w-4 h-4 mt-1 rounded border-gray-300 text-primary-500 focus:ring-primary-500"
+          checked={isChecked}
+          onChange={(e) => handleToggle(e.target.checked)}
           onClick={(e) => e.stopPropagation()}
+          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
         />
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <Icon className="w-5 h-5 text-gray-400" />
-            <h3 className="font-medium text-gray-900 dark:text-white">{result.categoryLabel}</h3>
-          </div>
-          <div className="mt-2 flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-            <span>{result.items.length} items</span>
-            <span>{formatBytes(result.totalSize)}</span>
-          </div>
-          {selectedCount > 0 && (
-            <div className="mt-2">
-              <div className="h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-primary-500 rounded-full transition-all"
-                  style={{ width: `${percentage}%` }}
-                />
-              </div>
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                {selectedCount} selected ({formatBytes(selectedSize)})
-              </p>
-            </div>
-          )}
+        <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center font-bold">
+          <Icon className="w-4 h-4" />
         </div>
+        <div>
+          <h4 className="font-bold text-xs text-gray-900 dark:text-white">{label}</h4>
+          <p className="text-[11px] text-gray-400 mt-0.5">{count} items scanned</p>
+        </div>
+      </div>
+
+      <div className="text-right">
+        <span className="font-bold text-xs text-blue-600 dark:text-blue-400">{formatBytes(totSize)}</span>
+        <p className="text-[11px] text-emerald-500 font-semibold">{formatBytes(selSize)} selected</p>
       </div>
     </div>
   )

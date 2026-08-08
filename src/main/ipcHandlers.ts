@@ -137,16 +137,11 @@ export function registerAllHandlers(window: BrowserWindow) {
       count = result.succeeded.length
       failed = result.failed.length
     } else {
-      // Direct delete (not recommended, but supported)
-      for (const item of items) {
-        try {
-          await import('fs/promises').then(fs => fs.rm(item.path, { recursive: true }))
-          freed += item.size
-          count++
-        } catch {
-          failed++
-        }
-      }
+      // Default: Move to System Trash / Recycle Bin via shell.trashItem
+      const result = await quarantineService.trashItems(items)
+      freed = result.succeeded.reduce((sum, item) => sum + item.size, 0)
+      count = result.succeeded.length
+      failed = result.failed.length
     }
 
     // Add to history
@@ -156,7 +151,7 @@ export function registerAllHandlers(window: BrowserWindow) {
       type: 'quick-clean',
       filesProcessed: count,
       spaceFreed: freed,
-      details: `Cleaned ${count} files`,
+      details: `Cleaned ${count} files to Trash`,
     })
 
     return { freed, count, failed }
@@ -178,11 +173,29 @@ export function registerAllHandlers(window: BrowserWindow) {
   }))
 
   ipcMain.handle(IPC_CHANNELS.DELETE_DUPLICATES, safeHandle(async (_, { items, useQuarantine }) => {
-    const result = await quarantineService.quarantineItems(items, 'duplicate-removal')
-    return {
-      freed: result.succeeded.reduce((sum, e) => sum + e.size, 0),
-      count: result.succeeded.length,
+    let freed = 0
+    let count = 0
+
+    if (useQuarantine) {
+      const result = await quarantineService.quarantineItems(items, 'duplicate-removal')
+      freed = result.succeeded.reduce((sum, e) => sum + e.size, 0)
+      count = result.succeeded.length
+    } else {
+      const result = await quarantineService.trashItems(items)
+      freed = result.succeeded.reduce((sum, item) => sum + item.size, 0)
+      count = result.succeeded.length
     }
+
+    await configService.addHistoryEntry({
+      id: uuidv4(),
+      timestamp: Date.now(),
+      type: 'duplicate-remove',
+      filesProcessed: count,
+      spaceFreed: freed,
+      details: `Removed ${count} duplicate files to Trash`,
+    })
+
+    return { freed, count }
   }))
 
   // ========== ORGANIZER HANDLERS ==========

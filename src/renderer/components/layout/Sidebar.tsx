@@ -12,6 +12,7 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  Trash2,
 } from 'lucide-react'
 import { useUIStore } from '../../stores/uiStore'
 import clsx from 'clsx'
@@ -24,7 +25,7 @@ const navItems = [
   { path: '/disk', icon: PieChart, label: 'Disk Analyzer' },
   { path: '/apps', icon: AppWindow, label: 'Apps' },
   { path: '/scheduler', icon: Clock, label: 'Scheduler' },
-  { path: '/quarantine', icon: Shield, label: 'Quarantine' },
+  { path: '/quarantine', icon: Trash2, label: 'Trash & Safety' },
   { path: '/settings', icon: Settings, label: 'Settings' },
 ]
 
@@ -34,54 +35,74 @@ export default function Sidebar() {
   return (
     <aside
       className={clsx(
-        'flex flex-col h-screen bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transition-all duration-200',
-        sidebarCollapsed ? 'w-16' : 'w-60'
+        'flex flex-col h-screen glass-card border-r border-gray-200/80 dark:border-gray-800/80 z-20 transition-all duration-300 relative',
+        sidebarCollapsed ? 'w-20' : 'w-64'
       )}
     >
-      {/* Logo */}
-      <div className="flex items-center h-14 px-4 border-b border-gray-200 dark:border-gray-800">
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-6 h-6 text-primary-500" />
+      {/* Header / Logo */}
+      <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200/60 dark:border-gray-800/60">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-500 to-purple-600 flex items-center justify-center shadow-md shadow-blue-500/20">
+            <Sparkles className="w-5 h-5 text-white" />
+          </div>
           {!sidebarCollapsed && (
-            <span className="font-semibold text-gray-900 dark:text-white">CleanSweep</span>
+            <div>
+              <span className="font-bold text-lg gradient-text-blue tracking-tight">CleanSweep</span>
+              <span className="block text-[10px] uppercase font-semibold tracking-wider text-gray-400 dark:text-gray-500 -mt-1">
+                Desktop Utility
+              </span>
+            </div>
           )}
         </div>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 py-4 overflow-y-auto">
-        <ul className="space-y-1 px-2">
-          {navItems.map((item) => (
-            <li key={item.path}>
-              <NavLink
-                to={item.path}
-                className={({ isActive }) =>
-                  clsx(
-                    'flex items-center gap-3 px-3 py-2 rounded-lg transition-colors',
-                    isActive
-                      ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-                  )
-                }
-              >
-                <item.icon className="w-5 h-5 flex-shrink-0" />
+      {/* Navigation Links */}
+      <nav className="flex-1 py-4 px-3 overflow-y-auto space-y-1">
+        {navItems.map((item) => (
+          <NavLink
+            key={item.path}
+            to={item.path}
+            className={({ isActive }) =>
+              clsx(
+                'flex items-center gap-3 px-3.5 py-3 rounded-xl font-medium text-sm transition-all duration-200 group relative',
+                isActive
+                  ? 'bg-blue-600/10 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100/70 dark:hover:bg-gray-800/60 hover:text-gray-900 dark:hover:text-white'
+              )
+            }
+          >
+            {({ isActive }) => (
+              <>
+                <item.icon
+                  className={clsx(
+                    'w-5 h-5 transition-transform duration-200 group-hover:scale-110 shrink-0',
+                    isActive ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'
+                  )}
+                />
                 {!sidebarCollapsed && <span>{item.label}</span>}
-              </NavLink>
-            </li>
-          ))}
-        </ul>
+                {isActive && (
+                  <span className="absolute right-0 top-2 bottom-2 w-1 bg-blue-600 dark:bg-blue-400 rounded-l-full" />
+                )}
+              </>
+            )}
+          </NavLink>
+        ))}
       </nav>
 
-      {/* Collapse toggle */}
-      <div className="p-2 border-t border-gray-200 dark:border-gray-800">
+      {/* Collapse Footer Toggle */}
+      <div className="p-3 border-t border-gray-200/60 dark:border-gray-800/60">
         <button
           onClick={toggleSidebar}
-          className="flex items-center justify-center w-full p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl text-gray-500 dark:text-gray-400 hover:bg-gray-100/70 dark:hover:bg-gray-800/60 transition-colors"
+          title={sidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
         >
           {sidebarCollapsed ? (
             <ChevronRight className="w-5 h-5" />
           ) : (
-            <ChevronLeft className="w-5 h-5" />
+            <>
+              <ChevronLeft className="w-5 h-5" />
+              <span className="text-xs font-medium">Collapse Sidebar</span>
+            </>
           )}
         </button>
       </div>

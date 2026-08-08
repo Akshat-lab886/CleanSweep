@@ -1,6 +1,6 @@
 import * as fs from 'fs/promises'
 import * as path from 'path'
-import { app } from 'electron'
+import { app, shell } from 'electron'
 import { v4 as uuid } from 'uuid'
 import type { ScannedItem, QuarantineEntry, ScanCategory } from '../../../shared/types'
 import { getFileStat, ensureDir, moveFile } from '../../utils/fsUtils'
@@ -15,6 +15,38 @@ export class QuarantineService {
     this.quarantinePath = path.join(userData, 'quarantine')
     this.manifestPath = path.join(this.quarantinePath, 'manifest.json')
     this.init()
+  }
+
+  async trashItem(filePath: string): Promise<boolean> {
+    try {
+      await shell.trashItem(filePath)
+      return true
+    } catch (err) {
+      logger.warn('QuarantineService', `Failed to move ${filePath} to System Trash: ${err}`)
+      // Fallback to force remove if trashItem fails
+      try {
+        await fs.rm(filePath, { recursive: true, force: true })
+        return true
+      } catch {
+        return false
+      }
+    }
+  }
+
+  async trashItems(items: ScannedItem[]): Promise<{ succeeded: ScannedItem[]; failed: Array<{ item: ScannedItem; error: string }> }> {
+    const succeeded: ScannedItem[] = []
+    const failed: Array<{ item: ScannedItem; error: string }> = []
+
+    for (const item of items) {
+      const ok = await this.trashItem(item.path)
+      if (ok) {
+        succeeded.push(item)
+      } else {
+        failed.push({ item, error: 'Failed to move to Trash' })
+      }
+    }
+
+    return { succeeded, failed }
   }
 
   private async init(): Promise<void> {
