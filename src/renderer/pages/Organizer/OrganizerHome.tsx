@@ -43,8 +43,9 @@ export default function OrganizerHome() {
 
   const handlePickSourceFolder = async () => {
     const res = await window.cleanSweepAPI.dialog.openFolder()
-    if (res.success && res.data && res.data[0]) {
-      setSourcePath(res.data[0])
+    if (res.success && res.data) {
+      const selected = Array.isArray(res.data) ? res.data[0] : res.data
+      if (selected) setSourcePath(selected)
     }
   }
 

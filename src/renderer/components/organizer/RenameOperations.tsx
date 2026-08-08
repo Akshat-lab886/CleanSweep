@@ -19,9 +19,12 @@ export default function RenameOperations({
 
   const handlePickFiles = async () => {
     const res = await window.cleanSweepAPI.dialog.openFolder()
-    if (res.success && res.data && res.data[0]) {
-      onSelectFiles([res.data[0]])
-      addToast('Selected directory for bulk rename', 'info')
+    if (res.success && res.data) {
+      const selected = Array.isArray(res.data) ? res.data[0] : res.data
+      if (selected) {
+        onSelectFiles([selected])
+        addToast('Selected directory for bulk rename', 'info')
+      }
     }
   }
 

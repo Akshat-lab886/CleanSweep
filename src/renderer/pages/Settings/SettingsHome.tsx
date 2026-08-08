@@ -23,9 +23,12 @@ export default function SettingsHome() {
 
   const handleBrowseWhitelist = async () => {
     const res = await window.cleanSweepAPI.dialog.openFolder()
-    if (res.success && res.data && res.data[0]) {
-      await addToWhitelist(res.data[0])
-      addToast('Added path to whitelist', 'success')
+    if (res.success && res.data) {
+      const selected = Array.isArray(res.data) ? res.data[0] : res.data
+      if (selected) {
+        await addToWhitelist(selected)
+        addToast('Added path to whitelist', 'success')
+      }
     }
   }
 

@@ -11,14 +11,18 @@ export class TrayManager {
   }
 
   private createTray() {
-    // Create tray icon
-    const iconPath = this.getIconPath()
-    const icon = nativeImage.createFromPath(iconPath)
+    try {
+      const iconPath = this.getIconPath()
+      const icon = nativeImage.createFromPath(iconPath)
+      const trayIcon = process.platform === 'darwin'
+        ? (icon.isEmpty() ? nativeImage.createEmpty() : icon.resize({ width: 16, height: 16 }))
+        : (icon.isEmpty() ? nativeImage.createEmpty() : icon.resize({ width: 32, height: 32 }))
 
-    // Resize for tray (16x16 on macOS, 32x32 on Windows)
-    const trayIcon = process.platform === 'darwin' ? icon.resize({ width: 16, height: 16 }) : icon.resize({ width: 32, height: 32 })
-
-    this.tray = new Tray(trayIcon)
+      this.tray = new Tray(trayIcon)
+    } catch {
+      // Fallback if tray icon fails to initialize
+      return
+    }
 
     const contextMenu = Menu.buildFromTemplate([
       {

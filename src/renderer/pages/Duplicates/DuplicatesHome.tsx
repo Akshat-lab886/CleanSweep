@@ -40,9 +40,9 @@ export default function DuplicatesHome() {
 
   const handleAddFolder = async () => {
     const response = await window.cleanSweepAPI.dialog.openFolder()
-    if (response.success && response.data && response.data.length > 0) {
-      const selected = response.data[0]
-      if (!scanPaths.includes(selected)) {
+    if (response.success && response.data) {
+      const selected = Array.isArray(response.data) ? response.data[0] : response.data
+      if (selected && !scanPaths.includes(selected)) {
         setScanPaths([...scanPaths, selected])
       }
     }

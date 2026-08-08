@@ -15,6 +15,7 @@ import { DiskAnalyzerService } from './services/disk/DiskAnalyzerService'
 import { AppManagerService } from './services/apps/AppManagerService'
 import { StartupManagerService } from './services/apps/StartupManagerService'
 import { FolderWatcherService } from './services/organizer/FolderWatcherService'
+import { SchedulerService } from './services/scheduler/SchedulerService'
 import type { ScanProgress, ScannedItem, OrganizerRule, RenamePattern, WatchFolder } from '../shared/types'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -35,6 +36,18 @@ const bulkRenamerService = new BulkRenamerService()
 const diskAnalyzerService = new DiskAnalyzerService()
 const appManagerService = new AppManagerService()
 const startupManagerService = new StartupManagerService()
+const schedulerService = new SchedulerService()
+
+schedulerService.setOnTaskRun(async (task) => {
+  if (task.taskType === 'quick-clean' || task.taskType === 'deep-clean') {
+    const whitelist = await configService.getWhitelist()
+    const results = await scannerService.quickScan({}, () => {}, whitelist)
+    const safeItems = results.flatMap(r => r.items.filter(i => i.safeToDelete))
+    if (safeItems.length > 0) {
+      await quarantineService.trashItems(safeItems)
+    }
+  }
+})
 
 folderWatcherService.setOnActivityCallback((activity) => {
   mainWindow?.webContents.send(IPC_CHANNELS.WATCHER_ACTIVITY, activity)
@@ -43,6 +56,7 @@ folderWatcherService.setOnActivityCallback((activity) => {
 export function registerAllHandlers(window: BrowserWindow) {
   mainWindow = window
   folderWatcherService.loadFromConfig()
+  schedulerService.loadAndStartAll()
 
   // ========== CONFIG HANDLERS ==========
   ipcMain.handle(IPC_CHANNELS.GET_CONFIG, safeHandle(async () => {
@@ -306,29 +320,19 @@ export function registerAllHandlers(window: BrowserWindow) {
 
   // ========== SCHEDULER HANDLERS ==========
   ipcMain.handle(IPC_CHANNELS.GET_SCHEDULES, safeHandle(async () => {
-    return configService.getSchedules()
+    return schedulerService.getSchedules()
   }))
 
   ipcMain.handle(IPC_CHANNELS.CREATE_SCHEDULE, safeHandle(async (_, task) => {
-    const schedules = await configService.getSchedules()
-    schedules.push(task)
-    await configService.saveSchedules(schedules)
-    return task
+    return schedulerService.createTask(task)
   }))
 
   ipcMain.handle(IPC_CHANNELS.DELETE_SCHEDULE, safeHandle(async (_, id: string) => {
-    const schedules = await configService.getSchedules()
-    const filtered = schedules.filter(s => s.id !== id)
-    await configService.saveSchedules(filtered)
+    await schedulerService.deleteTask(id)
   }))
 
   ipcMain.handle(IPC_CHANNELS.TOGGLE_SCHEDULE, safeHandle(async (_, { id, enabled }) => {
-    const schedules = await configService.getSchedules()
-    const schedule = schedules.find(s => s.id === id)
-    if (schedule) {
-      schedule.enabled = enabled
-      await configService.saveSchedules(schedules)
-    }
+    await schedulerService.toggleTask(id, enabled)
   }))
 
   // ========== DIALOG HANDLERS ==========
