@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Sparkles, Globe, Loader2, CheckCircle2, ShieldCheck, Trash2, Search, X, RotateCcw } from 'lucide-react'
+import { Sparkles, Globe, Loader2, CheckCircle2, ShieldCheck, Trash2, Search, X, RotateCcw, Zap, AlertTriangle } from 'lucide-react'
 import { useScanStore } from '../../stores/scanStore'
 import { useUIStore } from '../../stores/uiStore'
 import { BROWSER_LIST } from '../../../shared/constants'
@@ -20,11 +20,13 @@ export default function CleanerHome() {
     totalSelectedSize,
     totalFoundSize,
     startQuickScan,
+    startDeepScan,
     startBrowserScan,
     cancelScan,
     toggleCategorySelection,
     toggleItemSelection,
     selectAll,
+    selectSafeItems,
     deselectAll,
     executeClean,
     clearResults,
@@ -73,7 +75,7 @@ export default function CleanerHome() {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid md:grid-cols-3 gap-6">
           {/* Quick Scan Card */}
           <div className="glass-card rounded-2xl p-6 relative overflow-hidden group hover:border-blue-500/50 transition-all flex flex-col justify-between">
             <div>
@@ -91,11 +93,36 @@ export default function CleanerHome() {
               </p>
             </div>
             <button
-              onClick={startQuickScan}
+              onClick={() => startQuickScan()}
               className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-medium shadow-lg shadow-blue-500/25 transition-all flex items-center justify-center gap-2"
             >
               <Sparkles className="w-4 h-4" />
               <span>Start System Scan</span>
+            </button>
+          </div>
+
+          {/* Deep Scan Card */}
+          <div className="glass-card rounded-2xl p-6 relative overflow-hidden group hover:border-amber-500/50 transition-all flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shadow-inner">
+                  <Zap className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">Deep System Clean</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Deeper scan, more junk found</p>
+                </div>
+              </div>
+              <p className="text-xs text-gray-600 dark:text-gray-400 mb-6 leading-relaxed">
+                Scans deeper into system directories, includes hidden files, app leftovers, and additional cache locations.
+              </p>
+            </div>
+            <button
+              onClick={() => startDeepScan()}
+              className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-xl font-medium shadow-lg shadow-amber-500/25 transition-all flex items-center justify-center gap-2"
+            >
+              <Zap className="w-4 h-4" />
+              <span>Start Deep Scan</span>
             </button>
           </div>
 
@@ -241,6 +268,13 @@ export default function CleanerHome() {
             Select All
           </button>
           <button
+            onClick={selectSafeItems}
+            className="px-3.5 py-2 text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl hover:bg-emerald-200 dark:hover:bg-emerald-900/50 transition-all flex items-center gap-1.5"
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            Select Safe Only
+          </button>
+          <button
             onClick={deselectAll}
             className="px-3.5 py-2 text-xs font-semibold text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 transition-all"
           >
@@ -255,6 +289,18 @@ export default function CleanerHome() {
           </button>
         </div>
       </div>
+
+      {/* Unsafe Items Warning */}
+      {allItems.some((i) => !i.safeToDelete) && (
+        <div className="glass-panel rounded-2xl p-4 flex items-center gap-3 border border-amber-500/30 text-xs text-gray-600 dark:text-gray-300">
+          <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
+          <span>
+            <strong className="text-amber-600 dark:text-amber-400">Warning:</strong> Some items are marked as unsafe to delete
+            (system files, protected directories, or user data). Use <strong>Select Safe Only</strong> to select only the
+            verified-safe items for cleaning.
+          </span>
+        </div>
+      )}
 
       {/* Two Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -14,7 +14,18 @@ export class QuarantineService {
     const userData = app.getPath('userData')
     this.quarantinePath = path.join(userData, 'quarantine')
     this.manifestPath = path.join(this.quarantinePath, 'manifest.json')
-    this.init()
+    // Fire-and-forget init; callers can await init() if needed
+    void this.init()
+  }
+
+  async init(): Promise<void> {
+    try {
+      await ensureDir(this.quarantinePath)
+      // Clean up expired entries on startup
+      await this.purgeExpired()
+    } catch (err) {
+      logger.warn('QuarantineService', `Init failed: ${err}`)
+    }
   }
 
   async trashItem(filePath: string): Promise<boolean> {
@@ -23,12 +34,9 @@ export class QuarantineService {
       return true
     } catch (err) {
       logger.warn('QuarantineService', `Failed to move ${filePath} to System Trash: ${err}`)
-      try {
-        await fs.rm(filePath, { recursive: true, force: true })
-        return true
-      } catch {
-        return false
-      }
+      // Do NOT permanently delete as a fallback - this is dangerous.
+      // Return false so the caller knows the item could not be trashed.
+      return false
     }
   }
 
@@ -57,10 +65,6 @@ export class QuarantineService {
     }
 
     return { succeeded, failed }
-  }
-
-  private async init(): Promise<void> {
-    await ensureDir(this.quarantinePath)
   }
 
   async getManifest(): Promise<QuarantineEntry[]> {
@@ -171,5 +175,27 @@ export class QuarantineService {
   async getTotalSize(): Promise<number> {
     const manifest = await this.getManifest()
     return manifest.reduce((sum, e) => sum + e.size, 0)
+  }
+
+  // Purge expired quarantine entries
+  async purgeExpired(): Promise<number> {
+    const manifest = await this.getManifest()
+    const now = Date.now()
+    const active = manifest.filter(e => e.expiresAt > now)
+    const expired = manifest.filter(e => e.expiresAt <= now)
+
+    if (expired.length > 0) {
+      for (const entry of expired) {
+        try {
+          await fs.rm(entry.quarantinePath, { recursive: true, force: true })
+        } catch {
+          // Ignore individual failures
+        }
+      }
+      await this.saveManifest(active)
+      logger.info('QuarantineService', `Purged ${expired.length} expired quarantine entries`)
+    }
+
+    return expired.length
   }
 }

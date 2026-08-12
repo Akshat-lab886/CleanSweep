@@ -1,6 +1,7 @@
 import type {
   ScanProgress,
   ScanResult,
+  ScanOptions,
   ScannedItem,
   DuplicateGroup,
   OrganizerRule,
@@ -23,8 +24,8 @@ declare global {
   interface Window {
     cleanSweepAPI: {
       scanner: {
-        quickScan: (options?: { customPaths?: string[] }) => Promise<IPCResponse<ScanResult[]>>
-        deepScan: (options?: { customPaths?: string[] }) => Promise<IPCResponse<ScanResult[]>>
+        quickScan: (options?: ScanOptions) => Promise<IPCResponse<ScanResult[]>>
+        deepScan: (options?: ScanOptions) => Promise<IPCResponse<ScanResult[]>>
         browserScan: (browsers: string[], options: Record<string, boolean>) => Promise<IPCResponse<ScanResult[]>>
         cancelScan: () => void
         onProgress: (callback: (progress: ScanProgress) => void) => () => void

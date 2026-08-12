@@ -46,6 +46,15 @@ export interface ScanProgress {
   percentage: number
 }
 
+// Scan options
+export interface ScanOptions {
+  customPaths?: string[]
+  includeHidden?: boolean
+  minFileSizeBytes?: number
+  excludedExtensions?: string[]
+  maxDepth?: number
+}
+
 // Duplicate group
 export interface DuplicateGroup {
   id: string

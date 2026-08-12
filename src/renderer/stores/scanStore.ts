@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { ScanResult, ScanProgress, ScannedItem } from '../../shared/types'
+import type { ScanResult, ScanProgress, ScannedItem, ScanOptions } from '../../shared/types'
 
 interface ScanStore {
   status: 'idle' | 'scanning' | 'complete' | 'error'
@@ -12,8 +12,8 @@ interface ScanStore {
   totalSelectedSize: number
   totalFoundSize: number
 
-  startQuickScan: () => void
-  startDeepScan: () => void
+  startQuickScan: (options?: ScanOptions) => void
+  startDeepScan: (options?: ScanOptions) => void
   startBrowserScan: (browsers: string[], options: Record<string, boolean>) => void
   cancelScan: () => void
   setProgress: (progress: ScanProgress) => void
@@ -22,6 +22,7 @@ interface ScanStore {
   toggleItemSelection: (id: string) => void
   toggleCategorySelection: (category: string, selected: boolean) => void
   selectAll: () => void
+  selectSafeItems: () => void
   deselectAll: () => void
   executeClean: (useQuarantine: boolean) => Promise<{ freed: number; count: number; failed: number } | null>
   clearResults: () => void
@@ -38,7 +39,7 @@ export const useScanStore = create<ScanStore>((set, get) => ({
   totalSelectedSize: 0,
   totalFoundSize: 0,
 
-  startQuickScan: () => {
+  startQuickScan: (options?: ScanOptions) => {
     set({ status: 'scanning', scanType: 'quick', progress: null, results: [], errorMessage: null })
 
     // Subscribe to progress
@@ -50,7 +51,7 @@ export const useScanStore = create<ScanStore>((set, get) => ({
     })
 
     // Start scan
-    window.cleanSweepAPI.scanner.quickScan().then((response) => {
+    window.cleanSweepAPI.scanner.quickScan(options).then((response) => {
       if (response.success) {
         set({ status: 'complete', results: response.data })
         // Auto-select all safe-to-delete items
@@ -70,7 +71,7 @@ export const useScanStore = create<ScanStore>((set, get) => ({
     })
   },
 
-  startDeepScan: () => {
+  startDeepScan: (options?: ScanOptions) => {
     set({ status: 'scanning', scanType: 'deep', progress: null, results: [], errorMessage: null })
 
     const unsubscribe = window.cleanSweepAPI.scanner.onProgress((progress) => {
@@ -80,7 +81,7 @@ export const useScanStore = create<ScanStore>((set, get) => ({
       }
     })
 
-    window.cleanSweepAPI.scanner.deepScan().then((response) => {
+    window.cleanSweepAPI.scanner.deepScan(options).then((response) => {
       if (response.success) {
         set({ status: 'complete', results: response.data })
         const safeIds = new Set<string>()
@@ -171,13 +172,29 @@ export const useScanStore = create<ScanStore>((set, get) => ({
   },
 
   selectAll: () => {
-    const allIds = new Set<string>()
+    // Only select safe-to-delete items to prevent accidental deletion of user files
+    const safeIds = new Set<string>()
     get().results.forEach((result) => {
       result.items.forEach((item) => {
-        allIds.add(item.id)
+        if (item.safeToDelete) {
+          safeIds.add(item.id)
+        }
       })
     })
-    set({ selectedItemIds: allIds })
+    set({ selectedItemIds: safeIds })
+    get().recalculateTotals()
+  },
+
+  selectSafeItems: () => {
+    const safeIds = new Set<string>()
+    get().results.forEach((result) => {
+      result.items.forEach((item) => {
+        if (item.safeToDelete) {
+          safeIds.add(item.id)
+        }
+      })
+    })
+    set({ selectedItemIds: safeIds })
     get().recalculateTotals()
   },
 

@@ -49,6 +49,7 @@ export const IPC_CHANNELS = {
   LIST_QUARANTINE: 'cs:quarantine:list',
   RESTORE_QUARANTINE: 'cs:quarantine:restore',
   PURGE_QUARANTINE: 'cs:quarantine:purge',
+  PURGE_EXPIRED_QUARANTINE: 'cs:quarantine:purge-expired',
 
   // Config channels
   GET_CONFIG: 'cs:config:get',

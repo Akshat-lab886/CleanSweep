@@ -7,6 +7,7 @@ import { PlatformService } from './services/system/PlatformService'
 import { SystemStatsService } from './services/system/SystemStatsService'
 import { ScannerService } from './services/scanner/ScannerService'
 import { BrowserScanner } from './services/scanner/BrowserScanner'
+import { CleanerService } from './services/cleaner/CleanerService'
 import { DuplicateFinderService } from './services/duplicates/DuplicateFinderService'
 import { RulesEngine } from './services/organizer/RulesEngine'
 import { FileOrganizerService } from './services/organizer/FileOrganizerService'
@@ -24,6 +25,7 @@ let mainWindow: BrowserWindow | null = null
 // Service instances
 const configService = new ConfigService()
 const quarantineService = new QuarantineService()
+const cleanerService = new CleanerService(quarantineService)
 const platformService = new PlatformService()
 const systemStatsService = new SystemStatsService()
 const scannerService = new ScannerService(platformService)
@@ -41,10 +43,11 @@ const schedulerService = new SchedulerService()
 schedulerService.setOnTaskRun(async (task) => {
   if (task.taskType === 'quick-clean' || task.taskType === 'deep-clean') {
     const whitelist = await configService.getWhitelist()
-    const results = await scannerService.quickScan({}, () => {}, whitelist)
+    const scanFn = task.taskType === 'deep-clean' ? scannerService.deepScan.bind(scannerService) : scannerService.quickScan.bind(scannerService)
+    const results = await scanFn({}, () => {}, whitelist)
     const safeItems = results.flatMap(r => r.items.filter(i => i.safeToDelete))
     if (safeItems.length > 0) {
-      await quarantineService.trashItems(safeItems)
+      await cleanerService.executeClean(safeItems, false)
     }
   }
 })
@@ -80,7 +83,7 @@ export function registerAllHandlers(window: BrowserWindow) {
   }))
 
   ipcMain.handle(IPC_CHANNELS.GET_HISTORY, safeHandle(async () => {
-    return configService.getHistory()
+    return cleanerService.getHistory()
   }))
 
   // ========== QUARANTINE HANDLERS ==========
@@ -140,35 +143,12 @@ export function registerAllHandlers(window: BrowserWindow) {
   })
 
   // ========== CLEANER HANDLERS ==========
+  ipcMain.handle(IPC_CHANNELS.PREVIEW_CLEAN, safeHandle(async (_, items: ScannedItem[]) => {
+    return cleanerService.previewClean(items)
+  }))
+
   ipcMain.handle(IPC_CHANNELS.EXECUTE_CLEAN, safeHandle(async (_, { items, useQuarantine }) => {
-    let freed = 0
-    let count = 0
-    let failed = 0
-
-    if (useQuarantine) {
-      const result = await quarantineService.quarantineItems(items, 'manual-clean')
-      freed = result.succeeded.reduce((sum, e) => sum + e.size, 0)
-      count = result.succeeded.length
-      failed = result.failed.length
-    } else {
-      // Default: Move to System Trash / Recycle Bin via shell.trashItem
-      const result = await quarantineService.trashItems(items)
-      freed = result.succeeded.reduce((sum, item) => sum + item.size, 0)
-      count = result.succeeded.length
-      failed = result.failed.length
-    }
-
-    // Add to history
-    await configService.addHistoryEntry({
-      id: uuidv4(),
-      timestamp: Date.now(),
-      type: 'quick-clean',
-      filesProcessed: count,
-      spaceFreed: freed,
-      details: `Cleaned ${count} files to Trash`,
-    })
-
-    return { freed, count, failed }
+    return cleanerService.executeClean(items, useQuarantine)
   }))
 
   // ========== DUPLICATES HANDLERS ==========

@@ -5,17 +5,21 @@ import { isPathAccessible, listDirectory } from '../../utils/fsUtils'
 import type { ScanResult, ScanProgress, ScannedItem } from '../../../shared/types'
 import glob from 'fast-glob'
 
+export interface BrowserScanOptions {
+  clearCache: boolean
+  clearCookies: boolean
+  clearHistory: boolean
+  clearDownloadHistory: boolean
+  clearPasswords: boolean
+  cookieWhitelist: string[]
+}
+
 export class BrowserScanner {
   constructor(private platformService: PlatformService) {}
 
   async scanBrowsers(
     enabledBrowsers: string[],
-    options: {
-      clearCache: boolean
-      clearCookies: boolean
-      clearHistory: boolean
-      clearDownloadHistory: boolean
-    },
+    options: BrowserScanOptions,
     onProgress: (progress: ScanProgress) => void
   ): Promise<ScanResult[]> {
     const browserPaths = this.platformService.getBrowserPaths()
@@ -38,13 +42,62 @@ export class BrowserScanner {
       const items: ScannedItem[] = []
 
       for (const browserPath of paths) {
-        const expandedPaths = await this.expandBrowserPath(browserPath.cachePath)
+        // Scan cache files if clearCache is enabled
+        if (options.clearCache) {
+          const expandedPaths = await this.expandBrowserPath(browserPath.cachePath)
+          for (const cachePath of expandedPaths) {
+            if (!(await isPathAccessible(cachePath))) continue
+            const cacheItems = await this.getFilesInDirFast(cachePath)
+            items.push(...cacheItems)
+          }
+        }
 
-        for (const cachePath of expandedPaths) {
-          if (!(await isPathAccessible(cachePath))) continue
+        // Scan data path for cookies, history, passwords based on options
+        const dataPath = this.platformService.expandPath(browserPath.dataPath)
+        if (await isPathAccessible(dataPath)) {
+          // Scan cookies
+          if (options.clearCookies) {
+            const cookieItems = await this.scanDataFiles(
+              dataPath,
+              ['Cookies', 'cookies.sqlite', 'cookies.db', '*cookie*'],
+              'Browser cookie',
+              options.cookieWhitelist
+            )
+            items.push(...cookieItems)
+          }
 
-          const cacheItems = await this.getFilesInDirFast(cachePath)
-          items.push(...cacheItems)
+          // Scan history
+          if (options.clearHistory) {
+            const historyItems = await this.scanDataFiles(
+              dataPath,
+              ['History', 'history.sqlite', 'GlobalHistory', '*history*'],
+              'Browser history',
+              []
+            )
+            items.push(...historyItems)
+          }
+
+          // Scan download history
+          if (options.clearDownloadHistory) {
+            const downloadItems = await this.scanDataFiles(
+              dataPath,
+              ['History', 'downloads.sqlite', '*download*'],
+              'Browser download history',
+              []
+            )
+            items.push(...downloadItems)
+          }
+
+          // Scan saved passwords
+          if (options.clearPasswords) {
+            const passwordItems = await this.scanDataFiles(
+              dataPath,
+              ['Login Data', 'logins.json', 'signons.sqlite', '*password*', '*login*'],
+              'Saved password',
+              []
+            )
+            items.push(...passwordItems)
+          }
         }
       }
 
@@ -52,7 +105,7 @@ export class BrowserScanner {
         results.push({
           id: uuid(),
           category: 'browser-cache',
-          categoryLabel: `${this.getBrowserName(browserId)} Cache`,
+          categoryLabel: `${this.getBrowserName(browserId)} Data`,
           items,
           totalSize: items.reduce((sum, i) => sum + i.size, 0),
           scanDuration: 0,
@@ -63,6 +116,52 @@ export class BrowserScanner {
     }
 
     return results
+  }
+
+  private async scanDataFiles(
+    dataPath: string,
+    patterns: string[],
+    description: string,
+    whitelist: string[]
+  ): Promise<ScannedItem[]> {
+    const items: ScannedItem[] = []
+
+    for (const pattern of patterns) {
+      try {
+        const matches = await glob(pattern, {
+          cwd: dataPath,
+          absolute: true,
+          dot: true,
+          stats: true,
+          onlyFiles: true,
+          suppressErrors: true,
+          deep: 6,
+        })
+
+        for (const entry of matches) {
+          // Skip whitelisted cookies
+          if (whitelist.length > 0 && whitelist.some(w => entry.path.includes(w))) {
+            continue
+          }
+
+          items.push({
+            id: uuid(),
+            path: entry.path,
+            size: entry.stats ? entry.stats.size : 0,
+            type: 'file',
+            lastModified: entry.stats ? entry.stats.mtimeMs : Date.now(),
+            lastAccessed: entry.stats ? entry.stats.atimeMs : Date.now(),
+            category: 'browser-cache',
+            description,
+            safeToDelete: true,
+          })
+        }
+      } catch {
+        // Ignore pattern errors
+      }
+    }
+
+    return items
   }
 
   private async expandBrowserPath(pattern: string): Promise<string[]> {

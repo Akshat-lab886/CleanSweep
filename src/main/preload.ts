@@ -3,6 +3,7 @@ import { IPC_CHANNELS } from '../shared/ipcChannels'
 import type {
   ScanProgress,
   ScanResult,
+  ScanOptions,
   ScannedItem,
   DuplicateGroup,
   OrganizerRule,
@@ -28,9 +29,9 @@ type IPCChannelKey = keyof typeof IPC_CHANNELS
 contextBridge.exposeInMainWorld('cleanSweepAPI', {
   // Scanner
   scanner: {
-    quickScan: (options?: { customPaths?: string[] }) =>
+    quickScan: (options?: ScanOptions) =>
       ipcRenderer.invoke(IPC_CHANNELS.QUICK_SCAN, options) as Promise<IPCResponse<ScanResult[]>>,
-    deepScan: (options?: { customPaths?: string[] }) =>
+    deepScan: (options?: ScanOptions) =>
       ipcRenderer.invoke(IPC_CHANNELS.DEEP_SCAN, options) as Promise<IPCResponse<ScanResult[]>>,
     browserScan: (browsers: string[], options: Record<string, boolean>) =>
       ipcRenderer.invoke(IPC_CHANNELS.BROWSER_SCAN, { browsers, options }) as Promise<IPCResponse<ScanResult[]>>,
